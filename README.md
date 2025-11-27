@@ -1,4 +1,4 @@
-<<<<<<< HEAD
+
 # Personal OS
 
 Your Life. Simplified. Track budgets, habits, notes, and workouts all in one beautiful place.
@@ -176,29 +176,4 @@ npx prisma migrate reset
 npx prisma studio
 ```
 
-## Production Deployment
-
-1. **Update environment variables** for production
-2. **Change database** to PostgreSQL (recommended):
-   - Update `DATABASE_URL` in `.env`
-   - Update `provider` in `prisma/schema.prisma` to `"postgresql"`
-   - Run migrations
-3. **Build the application**:
-```bash
-npm run build
-```
-4. **Start production server**:
-```bash
-npm start
-```
-
-## License
-
-This project is private and proprietary.
-
-## Support
-
-For issues or questions, please contact the development team.
-=======
->>>>>>> 95f6fe80033121823de011b8051bf76c62da5c51
 
