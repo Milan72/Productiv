@@ -143,6 +143,7 @@ The application uses Prisma with SQLite and includes models for:
 - **WeeklyReview** - Weekly reflection entries
 - **Priority** - Daily priorities
 
+<!--
 ## API Endpoints
 
 ### Authentication
@@ -175,5 +176,9 @@ npx prisma migrate reset
 # Open Prisma Studio
 npx prisma studio
 ```
+-->
+
+
+Hello
 
 
