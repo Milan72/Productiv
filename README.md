@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Personal OS
 
 Your Life. Simplified. Track budgets, habits, notes, and workouts all in one beautiful place.
@@ -198,4 +199,6 @@ This project is private and proprietary.
 ## Support
 
 For issues or questions, please contact the development team.
+=======
+>>>>>>> 95f6fe80033121823de011b8051bf76c62da5c51
 
