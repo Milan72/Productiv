@@ -1,8 +1,6 @@
 
 # Personal OS
 
-Your Life. Simplified. Track budgets, habits, notes, and workouts all in one beautiful place.
-
 A full-stack personal productivity application built with Next.js, featuring authentication, database persistence, and a beautiful dark-themed UI matching the Figma design.
 
 ## Features
@@ -42,36 +40,6 @@ A full-stack personal productivity application built with Next.js, featuring aut
 - Node.js 18+ installed
 - npm or yarn package manager
 
-### Installation
-
-1. **Clone the repository** (if applicable) or navigate to the project directory
-
-2. **Install dependencies**:
-```bash
-npm install
-```
-
-3. **Set up environment variables**:
-Create a `.env` file in the root directory:
-```env
-DATABASE_URL="file:./dev.db"
-JWT_SECRET="your-super-secret-jwt-key-change-this-in-production"
-NEXT_PUBLIC_APP_URL="http://localhost:3000"
-```
-
-4. **Set up the database**:
-```bash
-npx prisma generate
-npx prisma migrate dev --name init
-```
-
-5. **Run the development server**:
-```bash
-npm run dev
-```
-
-6. **Open your browser**:
-Navigate to [http://localhost:3000](http://localhost:3000)
 
 ### First Steps
 
@@ -144,7 +112,6 @@ The application uses Prisma with SQLite and includes models for:
 - **Priority** - Daily priorities
 
 <!--
-## API Endpoints
 
 ### Authentication
 - `POST /api/auth/register` - Register new user
@@ -177,8 +144,4 @@ npx prisma migrate reset
 npx prisma studio
 ```
 -->
-
-
-Hello
-
 
