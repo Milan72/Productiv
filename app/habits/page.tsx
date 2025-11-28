@@ -120,9 +120,9 @@ export default function HabitsPage() {
 
   return (
     <AuthLayout>
-      <div className="p-8">
+      <div className="p-4 md:p-8 pb-20 space-y-8">
         {/* Header */}
-        <div className="flex items-center justify-between mb-8">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
             <h1 className="text-4xl font-bold text-white mb-2">Habits</h1>
             <p className="text-gray-400">Build consistency, one day at a time</p>
@@ -137,12 +137,12 @@ export default function HabitsPage() {
         </div>
 
         {/* This Week Calendar */}
-        <div className="bg-[#252a3a] rounded-2xl p-6 mb-8">
+        <div className="bg-[#252a3a] rounded-2xl p-4 md:p-6">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl font-bold text-white">This Week</h2>
             <Calendar className="w-5 h-5 text-purple-400" />
           </div>
-          <div className="flex gap-4">
+          <div className="flex gap-2 sm:gap-4 overflow-x-auto pb-2">
             {weekDays.map((day) => {
               const isSelected = isSameDay(day, selectedDate)
               const dayCompletions = habits.filter((h) =>
@@ -186,7 +186,7 @@ export default function HabitsPage() {
         </div>
 
         {/* Your Habits */}
-        <div className="mb-8">
+        <div>
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-2xl font-bold text-white">Your Habits</h2>
           </div>
@@ -272,7 +272,7 @@ export default function HabitsPage() {
         </div>
 
         {/* Statistics Cards */}
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="bg-[#252a3a] rounded-2xl p-6 text-center">
             <Flame className="w-6 h-6 text-red-400 mx-auto mb-2" />
             <div className="text-3xl font-bold text-white mb-1">{bestStreak}</div>

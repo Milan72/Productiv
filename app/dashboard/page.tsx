@@ -111,17 +111,17 @@ export default function Dashboard() {
 
   return (
     <AuthLayout>
-      <div className="p-8">
+      <div className="p-4 md:p-8 space-y-8">
         {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-4xl font-bold text-white mb-2">
+        <div className="mb-4 md:mb-8">
+          <h1 className="text-2xl md:text-4xl font-bold text-white mb-2">
             {getGreeting()}, {user?.name || 'User'}
           </h1>
           <p className="text-gray-300 text-base">{getFormattedDate()}</p>
         </div>
 
         {/* Top Cards */}
-        <div className="grid grid-cols-3 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
           <PerformanceCard
             percentage={stats?.performance || 0}
             label={
@@ -141,7 +141,7 @@ export default function Dashboard() {
         </div>
 
         {/* Today's Priorities */}
-        <div className="mb-8">
+        <div>
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-2xl font-bold text-white">
               Today&apos;s Priorities
@@ -173,7 +173,7 @@ export default function Dashboard() {
         </div>
 
         {/* Rockefeller Discipline */}
-        <div className="mb-8">
+        <div>
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-2xl font-bold text-white">
               Rockefeller Discipline
@@ -185,7 +185,7 @@ export default function Dashboard() {
               View All &gt;
             </button>
           </div>
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {defaultHabits.map((habit, index) => {
               const progress = Math.min(70 + index * 10, 95)
               return (
@@ -213,7 +213,7 @@ export default function Dashboard() {
         </div>
 
         {/* Ledger Snapshot */}
-        <div className="mb-8">
+        <div>
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-2xl font-bold text-white">Ledger Snapshot</h2>
             <button
@@ -223,7 +223,7 @@ export default function Dashboard() {
               View Details &gt;
             </button>
           </div>
-          <div className="grid grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             {budgetCategories.map((category) => {
               const Icon = category.icon
               const percentage = Math.round((category.spent / category.budget) * 100)
@@ -263,9 +263,9 @@ export default function Dashboard() {
         </div>
 
         {/* Quick Actions */}
-        <div>
+        <div className="pb-6">
           <h2 className="text-2xl font-bold text-white mb-4">Quick Actions</h2>
-          <div className="grid grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <button
               onClick={() => router.push('/daily-log')}
               className="bg-[#252a3a] rounded-2xl p-6 hover:bg-[#2a3042] transition-colors text-center"

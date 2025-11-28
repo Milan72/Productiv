@@ -33,7 +33,7 @@ export default function AuthLayout({
   }
 
   return (
-    <div className="flex h-screen bg-[#1e2332]">
+    <div className="flex flex-col md:flex-row min-h-screen bg-[#1e2332]">
       <Sidebar />
       <main className="flex-1 overflow-y-auto relative">
         {children}

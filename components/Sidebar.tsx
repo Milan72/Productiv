@@ -34,9 +34,9 @@ export default function Sidebar() {
   const { user } = useAuth()
 
   return (
-    <div className="w-64 bg-[#1a1f2e] h-screen flex flex-col">
+    <div className="w-full md:w-64 bg-[#1a1f2e] h-auto md:h-screen flex flex-col">
       {/* Logo Section */}
-      <div className="p-6 border-b border-gray-700/50">
+      <div className="p-4 md:p-6 border-b border-gray-700/50">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-full bg-yellow-400 flex items-center justify-center flex-shrink-0">
             <span className="text-white font-bold text-sm">PO</span>
@@ -49,7 +49,7 @@ export default function Sidebar() {
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 p-4 space-y-1">
+      <nav className="flex-1 p-2 md:p-4 space-y-1 overflow-x-auto md:overflow-visible">
         {navigationItems.map((item) => {
           const Icon = item.icon
           const isActive = pathname === item.path

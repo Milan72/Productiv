@@ -135,9 +135,9 @@ export default function LedgerPage() {
 
   return (
     <AuthLayout>
-      <div className="p-8">
+      <div className="p-4 md:p-8 space-y-8">
         {/* Header */}
-        <div className="flex items-center justify-between mb-8">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
             <h1 className="text-4xl font-bold text-white mb-2">Financial Ledger</h1>
             <p className="text-gray-400">Rockefeller-style penny accuracy</p>
@@ -152,9 +152,9 @@ export default function LedgerPage() {
         </div>
 
         {/* Date Navigation */}
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-4">
-            <div className="bg-[#252a3a] rounded-xl px-4 py-2 flex items-center gap-4">
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+            <div className="bg-[#252a3a] rounded-xl px-4 py-2 flex items-center justify-between sm:justify-start gap-4">
               <button
                 onClick={() => navigateMonth('prev')}
                 className="text-gray-400 hover:text-white transition-colors"
@@ -188,7 +188,7 @@ export default function LedgerPage() {
         </div>
 
         {/* Summary Cards */}
-        <div className="grid grid-cols-3 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
           <div className="bg-[#252a3a] rounded-2xl p-6 relative">
             <div className="flex items-start justify-between mb-2">
               <div>
@@ -232,9 +232,9 @@ export default function LedgerPage() {
         </div>
 
         {/* Budget Breakdown */}
-        <div className="mb-8">
+        <div>
           <h2 className="text-2xl font-bold text-white mb-4">Budget Breakdown</h2>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {defaultCategories.map((category) => {
               const Icon = category.icon
               const percentage = Math.round((category.spent / category.budget) * 100)
