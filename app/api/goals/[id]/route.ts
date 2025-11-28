@@ -9,6 +9,10 @@ const goalSchema = z.object({
   targetDate: z.string().optional(),
   status: z.enum(['active', 'completed', 'paused']).optional(),
   progress: z.number().min(0).max(100).optional(),
+  priority: z.string().optional(),
+  timeframe: z.string().optional(),
+  currentValue: z.number().optional(),
+  targetValue: z.number().optional(),
 })
 
 export async function GET(

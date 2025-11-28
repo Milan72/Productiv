@@ -29,12 +29,23 @@ const navigationItems = [
   { name: 'Profile', icon: User, path: '/profile' },
 ]
 
-export default function Sidebar() {
+interface SidebarProps {
+  onClose?: () => void
+}
+
+export default function Sidebar({ onClose }: SidebarProps) {
   const pathname = usePathname()
   const { user } = useAuth()
 
+  const handleLinkClick = () => {
+    // Close sidebar on mobile when a link is clicked
+    if (onClose && window.innerWidth < 768) {
+      onClose()
+    }
+  }
+
   return (
-    <div className="w-full md:w-64 bg-[#1a1f2e] h-auto md:h-screen flex flex-col">
+    <div className="w-64 bg-[#1a1f2e] h-screen flex flex-col">
       {/* Logo Section */}
       <div className="p-4 md:p-6 border-b border-gray-700/50">
         <div className="flex items-center gap-3">
@@ -49,7 +60,7 @@ export default function Sidebar() {
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 p-2 md:p-4 space-y-1 overflow-x-auto md:overflow-visible">
+      <nav className="flex-1 p-2 md:p-4 space-y-1 overflow-y-auto">
         {navigationItems.map((item) => {
           const Icon = item.icon
           const isActive = pathname === item.path
@@ -58,6 +69,7 @@ export default function Sidebar() {
             <Link
               key={item.path}
               href={item.path}
+              onClick={handleLinkClick}
               className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
                 isActive
                   ? 'bg-yellow-400 text-white'

@@ -9,6 +9,7 @@ import PriorityItem from '@/components/PriorityItem'
 import { useAuth } from '@/contexts/AuthContext'
 import { useRouter } from 'next/navigation'
 import { User, Briefcase, Heart, LineChart, Plus, DollarSign, Target, Calendar, BookOpen } from 'lucide-react'
+import { LineChart as RechartsLineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 
 function getGreeting() {
   const hour = new Date().getHours()
@@ -54,11 +55,30 @@ export default function Dashboard() {
   const [stats, setStats] = useState<DashboardStats | null>(null)
   const [habits, setHabits] = useState<Habit[]>([])
   const [loading, setLoading] = useState(true)
+  const [chartPeriod, setChartPeriod] = useState<'week' | 'month' | 'year'>('week')
+  const [chartData, setChartData] = useState<any>({
+    transactions: [],
+    habits: [],
+    exercises: [],
+  })
 
   useEffect(() => {
     fetchStats()
     fetchHabits()
-  }, [])
+    fetchChartData()
+  }, [chartPeriod])
+
+  async function fetchChartData() {
+    try {
+      const response = await fetch(`/api/dashboard/charts?period=${chartPeriod}`)
+      if (response.ok) {
+        const data = await response.json()
+        setChartData(data)
+      }
+    } catch (error) {
+      console.error('Failed to fetch chart data:', error)
+    }
+  }
 
   async function fetchStats() {
     try {
@@ -260,6 +280,83 @@ export default function Dashboard() {
               )
             })}
           </div>
+        </div>
+
+        {/* Charts Section */}
+        <div className="space-y-6">
+          <div className="flex items-center justify-between">
+            <h2 className="text-2xl font-bold text-white">Analytics</h2>
+            <select
+              value={chartPeriod}
+              onChange={(e) => setChartPeriod(e.target.value as 'week' | 'month' | 'year')}
+              className="bg-[#252a3a] border border-gray-600 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-yellow-400"
+            >
+              <option value="week">Last Week</option>
+              <option value="month">This Month</option>
+              <option value="year">This Year</option>
+            </select>
+          </div>
+
+          {/* Transactions Chart */}
+          <div className="bg-[#252a3a] rounded-2xl p-6">
+            <h3 className="text-lg font-bold text-white mb-4">Income vs Expenses</h3>
+            <ResponsiveContainer width="100%" height={300}>
+              <RechartsLineChart data={chartData.transactions}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                <XAxis dataKey="date" stroke="#9CA3AF" />
+                <YAxis stroke="#9CA3AF" />
+                <Tooltip
+                  contentStyle={{ backgroundColor: '#1e2332', border: '1px solid #374151', borderRadius: '8px' }}
+                  labelStyle={{ color: '#fff' }}
+                />
+                <Legend />
+                <Line type="monotone" dataKey="income" stroke="#10b981" strokeWidth={2} name="Income" />
+                <Line type="monotone" dataKey="expense" stroke="#ef4444" strokeWidth={2} name="Expenses" />
+              </RechartsLineChart>
+            </ResponsiveContainer>
+          </div>
+
+          {/* Habits Chart */}
+          {chartData.habits && chartData.habits.length > 0 && (
+            <div className="bg-[#252a3a] rounded-2xl p-6">
+              <h3 className="text-lg font-bold text-white mb-4">Habit Completions</h3>
+              <ResponsiveContainer width="100%" height={300}>
+                <RechartsLineChart data={chartData.habits}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                  <XAxis dataKey="name" stroke="#9CA3AF" />
+                  <YAxis stroke="#9CA3AF" />
+                  <Tooltip
+                    contentStyle={{ backgroundColor: '#1e2332', border: '1px solid #374151', borderRadius: '8px' }}
+                    labelStyle={{ color: '#fff' }}
+                  />
+                  <Legend />
+                  <Line type="monotone" dataKey="completions" stroke="#a855f7" strokeWidth={2} name="Completions" />
+                  <Line type="monotone" dataKey="streak" stroke="#f59e0b" strokeWidth={2} name="Streak" />
+                </RechartsLineChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+
+          {/* Exercises Chart */}
+          {chartData.exercises && chartData.exercises.length > 0 && (
+            <div className="bg-[#252a3a] rounded-2xl p-6">
+              <h3 className="text-lg font-bold text-white mb-4">Exercise Activity</h3>
+              <ResponsiveContainer width="100%" height={300}>
+                <RechartsLineChart data={chartData.exercises}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                  <XAxis dataKey="date" stroke="#9CA3AF" />
+                  <YAxis stroke="#9CA3AF" />
+                  <Tooltip
+                    contentStyle={{ backgroundColor: '#1e2332', border: '1px solid #374151', borderRadius: '8px' }}
+                    labelStyle={{ color: '#fff' }}
+                  />
+                  <Legend />
+                  <Line type="monotone" dataKey="duration" stroke="#3b82f6" strokeWidth={2} name="Duration (min)" />
+                  <Line type="monotone" dataKey="calories" stroke="#ec4899" strokeWidth={2} name="Calories" />
+                </RechartsLineChart>
+              </ResponsiveContainer>
+            </div>
+          )}
         </div>
 
         {/* Quick Actions */}

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import AuthLayout from '@/components/AuthLayout'
-import { Plus, Dumbbell, Trash2 } from 'lucide-react'
+import { Plus, Dumbbell, Trash2, Edit2 } from 'lucide-react'
 
 interface Exercise {
   id: string
@@ -18,6 +18,7 @@ export default function ExercisePage() {
   const [exercises, setExercises] = useState<Exercise[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
+  const [editingExercise, setEditingExercise] = useState<string | null>(null)
   const [formData, setFormData] = useState({
     name: '',
     type: 'cardio',
@@ -48,8 +49,11 @@ export default function ExercisePage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     try {
-      const response = await fetch('/api/exercises', {
-        method: 'POST',
+      const url = editingExercise ? `/api/exercises/${editingExercise}` : '/api/exercises'
+      const method = editingExercise ? 'PUT' : 'POST'
+
+      const response = await fetch(url, {
+        method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...formData,
@@ -59,6 +63,7 @@ export default function ExercisePage() {
       })
       if (response.ok) {
         setShowForm(false)
+        setEditingExercise(null)
         setFormData({
           name: '',
           type: 'cardio',
@@ -70,8 +75,21 @@ export default function ExercisePage() {
         fetchExercises()
       }
     } catch (error) {
-      console.error('Failed to create exercise:', error)
+      console.error('Failed to save exercise:', error)
     }
+  }
+
+  function handleEdit(exercise: Exercise) {
+    setEditingExercise(exercise.id)
+    setFormData({
+      name: exercise.name,
+      type: exercise.type,
+      duration: exercise.duration?.toString() || '',
+      calories: exercise.calories?.toString() || '',
+      notes: exercise.notes || '',
+      date: new Date(exercise.date).toISOString().split('T')[0],
+    })
+    setShowForm(true)
   }
 
   async function handleDelete(id: string) {
@@ -93,7 +111,18 @@ export default function ExercisePage() {
             <p className="text-gray-400">Track your workouts and activities</p>
           </div>
           <button
-            onClick={() => setShowForm(!showForm)}
+            onClick={() => {
+              setEditingExercise(null)
+              setFormData({
+                name: '',
+                type: 'cardio',
+                duration: '',
+                calories: '',
+                notes: '',
+                date: new Date().toISOString().split('T')[0],
+              })
+              setShowForm(!showForm)
+            }}
             className="bg-yellow-400 hover:bg-yellow-500 text-white font-bold py-3 px-6 rounded-lg flex items-center gap-2 transition-colors"
           >
             <Plus className="w-5 h-5" />
@@ -103,6 +132,9 @@ export default function ExercisePage() {
 
         {showForm && (
           <div className="bg-[#252a3a] rounded-2xl p-6 mb-6">
+            <h3 className="text-xl font-bold text-white mb-4">
+              {editingExercise ? 'Edit Exercise' : 'New Exercise'}
+            </h3>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <input
@@ -170,11 +202,22 @@ export default function ExercisePage() {
                   type="submit"
                   className="bg-yellow-400 hover:bg-yellow-500 text-white font-bold py-2 px-4 rounded-lg"
                 >
-                  Add Exercise
+                  {editingExercise ? 'Update' : 'Add'} Exercise
                 </button>
                 <button
                   type="button"
-                  onClick={() => setShowForm(false)}
+                  onClick={() => {
+                    setShowForm(false)
+                    setEditingExercise(null)
+                    setFormData({
+                      name: '',
+                      type: 'cardio',
+                      duration: '',
+                      calories: '',
+                      notes: '',
+                      date: new Date().toISOString().split('T')[0],
+                    })
+                  }}
                   className="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg"
                 >
                   Cancel
@@ -226,12 +269,20 @@ export default function ExercisePage() {
                       <p className="text-gray-300 mt-3">{exercise.notes}</p>
                     )}
                   </div>
-                  <button
-                    onClick={() => handleDelete(exercise.id)}
-                    className="text-red-400 hover:text-red-300 p-2 ml-4"
-                  >
-                    <Trash2 className="w-5 h-5" />
-                  </button>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => handleEdit(exercise)}
+                      className="text-blue-400 hover:text-blue-300 p-2"
+                    >
+                      <Edit2 className="w-5 h-5" />
+                    </button>
+                    <button
+                      onClick={() => handleDelete(exercise.id)}
+                      className="text-red-400 hover:text-red-300 p-2"
+                    >
+                      <Trash2 className="w-5 h-5" />
+                    </button>
+                  </div>
                 </div>
               </div>
             ))}

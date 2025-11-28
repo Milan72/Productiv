@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import AuthLayout from '@/components/AuthLayout'
-import { Plus, Target, Trash2, TrendingUp, Calendar, CheckCircle, Lightbulb, ChevronRight } from 'lucide-react'
+import { Plus, Target, Trash2, TrendingUp, Calendar, CheckCircle, Lightbulb, ChevronRight, Edit2 } from 'lucide-react'
 
 interface Goal {
   id: string
@@ -26,6 +26,7 @@ export default function GoalsPage() {
   const [goals, setGoals] = useState<Goal[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
+  const [editingGoal, setEditingGoal] = useState<string | null>(null)
   const [selectedFilter, setSelectedFilter] = useState('all')
   const [formData, setFormData] = useState({
     title: '',
@@ -33,6 +34,9 @@ export default function GoalsPage() {
     targetDate: '',
     priority: 'medium',
     timeframe: 'quarterly',
+    progress: 0,
+    currentValue: '',
+    targetValue: '',
   })
 
   useEffect(() => {
@@ -56,25 +60,61 @@ export default function GoalsPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     try {
-      const response = await fetch('/api/goals', {
-        method: 'POST',
+      const payload: any = {
+        title: formData.title,
+        description: formData.description || null,
+        targetDate: formData.targetDate || null,
+        priority: formData.priority,
+        timeframe: formData.timeframe,
+        progress: formData.progress,
+      }
+
+      if (formData.currentValue && formData.targetValue) {
+        payload.currentValue = parseFloat(formData.currentValue)
+        payload.targetValue = parseFloat(formData.targetValue)
+      }
+
+      const url = editingGoal ? `/api/goals/${editingGoal}` : '/api/goals'
+      const method = editingGoal ? 'PUT' : 'POST'
+
+      const response = await fetch(url, {
+        method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData),
+        body: JSON.stringify(payload),
       })
       if (response.ok) {
         setShowForm(false)
+        setEditingGoal(null)
         setFormData({
           title: '',
           description: '',
           targetDate: '',
           priority: 'medium',
           timeframe: 'quarterly',
+          progress: 0,
+          currentValue: '',
+          targetValue: '',
         })
         fetchGoals()
       }
     } catch (error) {
-      console.error('Failed to create goal:', error)
+      console.error('Failed to save goal:', error)
     }
+  }
+
+  function handleEdit(goal: Goal) {
+    setEditingGoal(goal.id)
+    setFormData({
+      title: goal.title,
+      description: goal.description || '',
+      targetDate: goal.targetDate ? new Date(goal.targetDate).toISOString().split('T')[0] : '',
+      priority: goal.priority || 'medium',
+      timeframe: goal.timeframe || 'quarterly',
+      progress: goal.progress,
+      currentValue: goal.currentValue?.toString() || '',
+      targetValue: goal.targetValue?.toString() || '',
+    })
+    setShowForm(true)
   }
 
   async function handleDelete(id: string) {
@@ -292,12 +332,20 @@ export default function GoalsPage() {
                         )}
                       </div>
                     </div>
-                    <button
-                      onClick={() => handleDelete(goal.id)}
-                      className="text-red-400 hover:text-red-300 p-2 ml-4"
-                    >
-                      <Trash2 className="w-5 h-5" />
-                    </button>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => handleEdit(goal)}
+                        className="text-blue-400 hover:text-blue-300 p-2"
+                      >
+                        <Edit2 className="w-5 h-5" />
+                      </button>
+                      <button
+                        onClick={() => handleDelete(goal.id)}
+                        className="text-red-400 hover:text-red-300 p-2"
+                      >
+                        <Trash2 className="w-5 h-5" />
+                      </button>
+                    </div>
                   </div>
                 </div>
               )
@@ -327,7 +375,9 @@ export default function GoalsPage() {
         {showForm && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
             <div className="bg-[#252a3a] rounded-2xl p-6 w-full max-w-md mx-4">
-              <h3 className="text-xl font-bold text-white mb-4">New Goal</h3>
+              <h3 className="text-xl font-bold text-white mb-4">
+                {editingGoal ? 'Edit Goal' : 'New Goal'}
+              </h3>
               <form onSubmit={handleSubmit} className="space-y-4">
                 <input
                   type="text"
@@ -382,16 +432,62 @@ export default function GoalsPage() {
                   }
                   className="w-full bg-[#1e2332] border border-gray-600 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-yellow-400"
                 />
+                <div className="grid grid-cols-2 gap-4">
+                  <input
+                    type="number"
+                    step="0.01"
+                    placeholder="Current Value (optional)"
+                    value={formData.currentValue}
+                    onChange={(e) =>
+                      setFormData({ ...formData, currentValue: e.target.value })
+                    }
+                    className="bg-[#1e2332] border border-gray-600 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:outline-none focus:border-yellow-400"
+                  />
+                  <input
+                    type="number"
+                    step="0.01"
+                    placeholder="Target Value (optional)"
+                    value={formData.targetValue}
+                    onChange={(e) =>
+                      setFormData({ ...formData, targetValue: e.target.value })
+                    }
+                    className="bg-[#1e2332] border border-gray-600 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:outline-none focus:border-yellow-400"
+                  />
+                </div>
+                <input
+                  type="number"
+                  min="0"
+                  max="100"
+                  placeholder="Progress %"
+                  value={formData.progress}
+                  onChange={(e) =>
+                    setFormData({ ...formData, progress: parseInt(e.target.value) || 0 })
+                  }
+                  className="w-full bg-[#1e2332] border border-gray-600 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:outline-none focus:border-yellow-400"
+                />
                 <div className="flex gap-2">
                   <button
                     type="submit"
                     className="bg-yellow-400 hover:bg-yellow-500 text-white font-bold py-2 px-4 rounded-lg flex-1"
                   >
-                    Create Goal
+                    {editingGoal ? 'Update' : 'Create'} Goal
                   </button>
                   <button
                     type="button"
-                    onClick={() => setShowForm(false)}
+                    onClick={() => {
+                      setShowForm(false)
+                      setEditingGoal(null)
+                      setFormData({
+                        title: '',
+                        description: '',
+                        targetDate: '',
+                        priority: 'medium',
+                        timeframe: 'quarterly',
+                        progress: 0,
+                        currentValue: '',
+                        targetValue: '',
+                      })
+                    }}
                     className="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg"
                   >
                     Cancel

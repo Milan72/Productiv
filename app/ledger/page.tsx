@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import AuthLayout from '@/components/AuthLayout'
-import { Plus, DollarSign, ArrowUp, ArrowDown, Trash2, ChevronLeft, ChevronRight, Calendar, TrendingUp, TrendingDown, User, Briefcase, Heart, LineChart } from 'lucide-react'
+import { Plus, DollarSign, ArrowUp, ArrowDown, Trash2, ChevronLeft, ChevronRight, Calendar, TrendingUp, TrendingDown, User, Briefcase, Heart, LineChart, Edit2, Save, X } from 'lucide-react'
 
 interface Transaction {
   id: string
@@ -27,10 +27,14 @@ export default function LedgerPage() {
     totalExpenses: 0,
     balance: 0,
     incomeChange: 0,
+    startingBalance: 0,
   })
   const [budgetCategories, setBudgetCategories] = useState<BudgetCategory[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
+  const [editingTransaction, setEditingTransaction] = useState<string | null>(null)
+  const [editingCategory, setEditingCategory] = useState<string | null>(null)
+  const [editingStartingBalance, setEditingStartingBalance] = useState(false)
   const [selectedPeriod, setSelectedPeriod] = useState<'day' | 'week' | 'month'>('month')
   const [currentDate, setCurrentDate] = useState(new Date())
   const [formData, setFormData] = useState({
@@ -40,10 +44,41 @@ export default function LedgerPage() {
     description: '',
     date: new Date().toISOString().split('T')[0],
   })
+  const [categoryEditData, setCategoryEditData] = useState<Record<string, { name: string; budget: number }>>({})
+  const [startingBalanceValue, setStartingBalanceValue] = useState('0')
 
   useEffect(() => {
     fetchData()
+    fetchStartingBalance()
   }, [currentDate, selectedPeriod])
+
+  async function fetchStartingBalance() {
+    try {
+      const response = await fetch('/api/user/starting-balance')
+      if (response.ok) {
+        const data = await response.json()
+        setStartingBalanceValue(data.startingBalance.toString())
+      }
+    } catch (error) {
+      console.error('Failed to fetch starting balance:', error)
+    }
+  }
+
+  async function updateStartingBalance() {
+    try {
+      const response = await fetch('/api/user/starting-balance', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ startingBalance: parseFloat(startingBalanceValue) }),
+      })
+      if (response.ok) {
+        setEditingStartingBalance(false)
+        fetchData()
+      }
+    } catch (error) {
+      console.error('Failed to update starting balance:', error)
+    }
+  }
 
   async function fetchData() {
     try {
@@ -74,28 +109,63 @@ export default function LedgerPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     try {
-      const response = await fetch('/api/transactions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...formData,
-          amount: parseFloat(formData.amount),
-        }),
-      })
-      if (response.ok) {
-        setShowForm(false)
-        setFormData({
-          amount: '',
-          type: 'expense',
-          category: '',
-          description: '',
-          date: new Date().toISOString().split('T')[0],
+      if (editingTransaction) {
+        const response = await fetch(`/api/transactions/${editingTransaction}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            ...formData,
+            amount: parseFloat(formData.amount),
+          }),
         })
-        fetchData()
+        if (response.ok) {
+          setEditingTransaction(null)
+          setShowForm(false)
+          setFormData({
+            amount: '',
+            type: 'expense',
+            category: '',
+            description: '',
+            date: new Date().toISOString().split('T')[0],
+          })
+          fetchData()
+        }
+      } else {
+        const response = await fetch('/api/transactions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            ...formData,
+            amount: parseFloat(formData.amount),
+          }),
+        })
+        if (response.ok) {
+          setShowForm(false)
+          setFormData({
+            amount: '',
+            type: 'expense',
+            category: '',
+            description: '',
+            date: new Date().toISOString().split('T')[0],
+          })
+          fetchData()
+        }
       }
     } catch (error) {
-      console.error('Failed to create transaction:', error)
+      console.error('Failed to save transaction:', error)
     }
+  }
+
+  async function handleEditTransaction(transaction: Transaction) {
+    setEditingTransaction(transaction.id)
+    setFormData({
+      amount: transaction.amount.toString(),
+      type: transaction.type,
+      category: transaction.category,
+      description: transaction.description || '',
+      date: new Date(transaction.date).toISOString().split('T')[0],
+    })
+    setShowForm(true)
   }
 
   async function handleDelete(id: string) {
@@ -106,6 +176,36 @@ export default function LedgerPage() {
     } catch (error) {
       console.error('Failed to delete transaction:', error)
     }
+  }
+
+  async function handleUpdateCategory(categoryId: string) {
+    const editData = categoryEditData[categoryId]
+    if (!editData) return
+
+    try {
+      const response = await fetch(`/api/budget-categories/${categoryId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(editData),
+      })
+      if (response.ok) {
+        setEditingCategory(null)
+        setCategoryEditData({})
+        fetchData()
+      }
+    } catch (error) {
+      console.error('Failed to update category:', error)
+    }
+  }
+
+  function startEditingCategory(category: BudgetCategory) {
+    setEditingCategory(category.id)
+    setCategoryEditData({
+      [category.id]: {
+        name: category.name,
+        budget: category.budget,
+      },
+    })
   }
 
   function getMonthYearString() {
@@ -133,28 +233,94 @@ export default function LedgerPage() {
     { name: 'Investments', icon: LineChart, color: 'blue', budget: 3000, spent: 2800 },
   ]
 
+  // Merge default categories with user's categories
+  const allCategories = defaultCategories.map((defaultCat) => {
+    const userCat = budgetCategories.find((c) => c.name === defaultCat.name)
+    return userCat || defaultCat
+  })
+
   return (
     <AuthLayout>
-      <div className="p-4 md:p-8 space-y-8">
+      <div className="p-4 md:p-8">
         {/* Header */}
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+        <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 md:mb-8 gap-4">
           <div>
-            <h1 className="text-4xl font-bold text-white mb-2">Financial Ledger</h1>
+            <h1 className="text-3xl md:text-4xl font-bold text-white mb-2">Financial Ledger</h1>
             <p className="text-gray-400">Rockefeller-style penny accuracy</p>
           </div>
           <button
-            onClick={() => setShowForm(!showForm)}
-            className="bg-yellow-400 hover:bg-yellow-500 text-white font-bold py-3 px-6 rounded-lg flex items-center gap-2 transition-colors"
+            onClick={() => {
+              setEditingTransaction(null)
+              setFormData({
+                amount: '',
+                type: 'expense',
+                category: '',
+                description: '',
+                date: new Date().toISOString().split('T')[0],
+              })
+              setShowForm(!showForm)
+            }}
+            className="bg-yellow-400 hover:bg-yellow-500 text-white font-bold py-3 px-6 rounded-lg flex items-center gap-2 transition-colors w-full md:w-auto justify-center"
           >
             <Plus className="w-5 h-5" />
             Add Transaction
           </button>
         </div>
 
+        {/* Starting Balance */}
+        <div className="bg-[#252a3a] rounded-2xl p-4 md:p-6 mb-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="text-gray-400 text-sm mb-2">Starting Balance</div>
+              {editingStartingBalance ? (
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={startingBalanceValue}
+                    onChange={(e) => setStartingBalanceValue(e.target.value)}
+                    className="bg-[#1e2332] border border-gray-600 rounded-lg px-4 py-2 text-white text-xl font-bold w-48"
+                  />
+                  <button
+                    onClick={updateStartingBalance}
+                    className="p-2 bg-green-500 hover:bg-green-600 rounded-lg"
+                  >
+                    <Save className="w-5 h-5 text-white" />
+                  </button>
+                  <button
+                    onClick={() => {
+                      setEditingStartingBalance(false)
+                      fetchStartingBalance()
+                    }}
+                    className="p-2 bg-gray-600 hover:bg-gray-700 rounded-lg"
+                  >
+                    <X className="w-5 h-5 text-white" />
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-3">
+                  <div className="text-2xl md:text-3xl font-bold text-yellow-400">
+                    ${parseFloat(startingBalanceValue).toLocaleString('en-US', {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })}
+                  </div>
+                  <button
+                    onClick={() => setEditingStartingBalance(true)}
+                    className="p-2 hover:bg-gray-700 rounded-lg transition-colors"
+                  >
+                    <Edit2 className="w-4 h-4 text-gray-400" />
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
         {/* Date Navigation */}
-        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-          <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-            <div className="bg-[#252a3a] rounded-xl px-4 py-2 flex items-center justify-between sm:justify-start gap-4">
+        <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
+          <div className="flex items-center gap-4">
+            <div className="bg-[#252a3a] rounded-xl px-4 py-2 flex items-center gap-4">
               <button
                 onClick={() => navigateMonth('prev')}
                 className="text-gray-400 hover:text-white transition-colors"
@@ -174,7 +340,7 @@ export default function LedgerPage() {
                 <button
                   key={period}
                   onClick={() => setSelectedPeriod(period)}
-                  className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                  className={`px-4 py-2 rounded-lg font-medium transition-colors text-sm ${
                     selectedPeriod === period
                       ? 'bg-yellow-400 text-white'
                       : 'bg-[#252a3a] text-gray-300 hover:text-white'
@@ -188,12 +354,12 @@ export default function LedgerPage() {
         </div>
 
         {/* Summary Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
-          <div className="bg-[#252a3a] rounded-2xl p-6 relative">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6 mb-6 md:mb-8">
+          <div className="bg-[#252a3a] rounded-2xl p-4 md:p-6 relative">
             <div className="flex items-start justify-between mb-2">
               <div>
                 <div className="text-gray-400 text-sm mb-2">Total Income</div>
-                <div className="text-3xl font-bold text-green-400">
+                <div className="text-2xl md:text-3xl font-bold text-green-400">
                   ${summary.totalIncome.toFixed(2)}
                 </div>
                 <div className="text-gray-400 text-sm mt-2">
@@ -203,11 +369,11 @@ export default function LedgerPage() {
               <TrendingUp className="w-6 h-6 text-green-400" />
             </div>
           </div>
-          <div className="bg-[#252a3a] rounded-2xl p-6 relative">
+          <div className="bg-[#252a3a] rounded-2xl p-4 md:p-6 relative">
             <div className="flex items-start justify-between mb-2">
               <div>
                 <div className="text-gray-400 text-sm mb-2">Total Expenses</div>
-                <div className="text-3xl font-bold text-red-400">
+                <div className="text-2xl md:text-3xl font-bold text-red-400">
                   ${summary.totalExpenses.toFixed(2)}
                 </div>
                 <div className="text-gray-400 text-sm mt-2">
@@ -217,11 +383,11 @@ export default function LedgerPage() {
               <TrendingDown className="w-6 h-6 text-red-400" />
             </div>
           </div>
-          <div className="bg-[#252a3a] rounded-2xl p-6 relative">
+          <div className="bg-[#252a3a] rounded-2xl p-4 md:p-6 relative">
             <div className="flex items-start justify-between mb-2">
               <div>
                 <div className="text-gray-400 text-sm mb-2">Net Position</div>
-                <div className="text-3xl font-bold text-yellow-400">
+                <div className="text-2xl md:text-3xl font-bold text-yellow-400">
                   ${summary.balance.toFixed(2)}
                 </div>
                 <div className="text-gray-400 text-sm mt-2">Available funds</div>
@@ -232,48 +398,110 @@ export default function LedgerPage() {
         </div>
 
         {/* Budget Breakdown */}
-        <div>
-          <h2 className="text-2xl font-bold text-white mb-4">Budget Breakdown</h2>
+        <div className="mb-6 md:mb-8">
+          <h2 className="text-xl md:text-2xl font-bold text-white mb-4">Budget Breakdown</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {defaultCategories.map((category) => {
-              const Icon = category.icon
+            {allCategories.map((category) => {
+              const Icon = 'icon' in category ? category.icon : User
+              const categoryId = 'id' in category ? category.id : category.name
               const percentage = Math.round((category.spent / category.budget) * 100)
               const isOverBudget = percentage >= 90
+              const isEditing = editingCategory === categoryId
+              const editData = categoryEditData[categoryId] || { name: category.name, budget: category.budget }
 
+              const categoryColor = 'color' in category ? category.color : 'purple'
+              
               return (
-                <div key={category.name} className="bg-[#252a3a] rounded-2xl p-6">
+                <div key={category.name} className="bg-[#252a3a] rounded-2xl p-4 md:p-6">
                   <div className="flex items-center gap-4 mb-4">
-                    <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${
-                      category.color === 'purple' ? 'bg-purple-500/20' :
-                      category.color === 'brown' ? 'bg-amber-700/20' :
-                      category.color === 'pink' ? 'bg-pink-500/20' :
+                    <div className={`w-12 h-12 rounded-lg flex items-center justify-center flex-shrink-0 ${
+                      categoryColor === 'purple' ? 'bg-purple-500/20' :
+                      categoryColor === 'brown' ? 'bg-amber-700/20' :
+                      categoryColor === 'pink' ? 'bg-pink-500/20' :
                       'bg-blue-500/20'
                     }`}>
                       <Icon className={`w-6 h-6 ${
-                        category.color === 'purple' ? 'text-purple-400' :
-                        category.color === 'brown' ? 'text-amber-600' :
-                        category.color === 'pink' ? 'text-pink-400' :
+                        categoryColor === 'purple' ? 'text-purple-400' :
+                        categoryColor === 'brown' ? 'text-amber-600' :
+                        categoryColor === 'pink' ? 'text-pink-400' :
                         'text-blue-400'
                       }`} />
                     </div>
                     <div className="flex-1">
-                      <h3 className="text-white font-semibold mb-1">{category.name}</h3>
-                      <div className="text-gray-400 text-sm">
-                        ${category.spent.toLocaleString()} / ${category.budget.toLocaleString()}
+                      {isEditing && 'id' in category ? (
+                        <div className="space-y-2">
+                          <input
+                            type="text"
+                            value={editData.name}
+                            onChange={(e) =>
+                              setCategoryEditData({
+                                ...categoryEditData,
+                                [categoryId]: { ...editData, name: e.target.value },
+                              })
+                            }
+                            className="w-full bg-[#1e2332] border border-gray-600 rounded-lg px-3 py-2 text-white text-sm"
+                          />
+                          <input
+                            type="number"
+                            step="0.01"
+                            value={editData.budget}
+                            onChange={(e) =>
+                              setCategoryEditData({
+                                ...categoryEditData,
+                                [categoryId]: { ...editData, budget: parseFloat(e.target.value) },
+                              })
+                            }
+                            className="w-full bg-[#1e2332] border border-gray-600 rounded-lg px-3 py-2 text-white text-sm"
+                          />
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => handleUpdateCategory(categoryId)}
+                              className="px-3 py-1 bg-green-500 hover:bg-green-600 rounded text-white text-sm"
+                            >
+                              Save
+                            </button>
+                            <button
+                              onClick={() => {
+                                setEditingCategory(null)
+                                setCategoryEditData({})
+                              }}
+                              className="px-3 py-1 bg-gray-600 hover:bg-gray-700 rounded text-white text-sm"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <>
+                          <h3 className="text-white font-semibold mb-1">{category.name}</h3>
+                          <div className="text-gray-400 text-sm">
+                            ${category.spent.toLocaleString()} / ${category.budget.toLocaleString()}
+                          </div>
+                        </>
+                      )}
+                    </div>
+                    {!isEditing && 'id' in category && (
+                      <button
+                        onClick={() => startEditingCategory(category as BudgetCategory)}
+                        className="p-2 hover:bg-gray-700 rounded-lg transition-colors"
+                      >
+                        <Edit2 className="w-4 h-4 text-gray-400" />
+                      </button>
+                    )}
+                  </div>
+                  {!isEditing && (
+                    <div className="mb-2">
+                      <div className="w-full bg-gray-700 rounded-full h-2 mb-2">
+                        <div
+                          className={`h-2 rounded-full ${
+                            isOverBudget ? 'bg-red-400' : 'bg-yellow-400'
+                          }`}
+                          style={{ width: `${Math.min(percentage, 100)}%` }}
+                        />
                       </div>
+                      <div className="text-white text-sm font-medium">{percentage}%</div>
                     </div>
-                  </div>
-                  <div className="mb-2">
-                    <div className="w-full bg-gray-700 rounded-full h-2 mb-2">
-                      <div
-                        className={`h-2 rounded-full ${
-                          isOverBudget ? 'bg-red-400' : 'bg-yellow-400'
-                        }`}
-                        style={{ width: `${Math.min(percentage, 100)}%` }}
-                      />
-                    </div>
-                    <div className="text-white text-sm font-medium">{percentage}%</div>
-                  </div>
+                  )}
                 </div>
               )
             })}
@@ -283,7 +511,7 @@ export default function LedgerPage() {
         {/* Recent Transactions */}
         <div>
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-2xl font-bold text-white">Recent Transactions</h2>
+            <h2 className="text-xl md:text-2xl font-bold text-white">Recent Transactions</h2>
             <button className="text-gray-400 hover:text-white text-sm transition-colors">
               View All &gt;
             </button>
@@ -317,8 +545,8 @@ export default function LedgerPage() {
                           <ArrowDown className="w-5 h-5 text-red-400" />
                         )}
                       </div>
-                      <div className="flex-1">
-                        <div className="flex items-center gap-3">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-3 flex-wrap">
                           <h3 className="text-white font-medium">
                             {transaction.category}
                           </h3>
@@ -327,7 +555,7 @@ export default function LedgerPage() {
                           </span>
                         </div>
                         {transaction.description && (
-                          <p className="text-gray-400 text-sm mt-1">
+                          <p className="text-gray-400 text-sm mt-1 truncate">
                             {transaction.description}
                           </p>
                         )}
@@ -343,12 +571,20 @@ export default function LedgerPage() {
                         {transaction.amount.toFixed(2)}
                       </div>
                     </div>
-                    <button
-                      onClick={() => handleDelete(transaction.id)}
-                      className="text-red-400 hover:text-red-300 p-2 ml-4"
-                    >
-                      <Trash2 className="w-5 h-5" />
-                    </button>
+                    <div className="flex gap-2 ml-4">
+                      <button
+                        onClick={() => handleEditTransaction(transaction)}
+                        className="text-blue-400 hover:text-blue-300 p-2"
+                      >
+                        <Edit2 className="w-5 h-5" />
+                      </button>
+                      <button
+                        onClick={() => handleDelete(transaction.id)}
+                        className="text-red-400 hover:text-red-300 p-2"
+                      >
+                        <Trash2 className="w-5 h-5" />
+                      </button>
+                    </div>
                   </div>
                 </div>
               ))}
@@ -356,11 +592,13 @@ export default function LedgerPage() {
           )}
         </div>
 
-        {/* Add Transaction Form */}
+        {/* Add/Edit Transaction Form */}
         {showForm && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-            <div className="bg-[#252a3a] rounded-2xl p-6 w-full max-w-md mx-4">
-              <h3 className="text-xl font-bold text-white mb-4">Add Transaction</h3>
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className="bg-[#252a3a] rounded-2xl p-6 w-full max-w-md">
+              <h3 className="text-xl font-bold text-white mb-4">
+                {editingTransaction ? 'Edit Transaction' : 'Add Transaction'}
+              </h3>
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <input
@@ -420,11 +658,21 @@ export default function LedgerPage() {
                     type="submit"
                     className="bg-yellow-400 hover:bg-yellow-500 text-white font-bold py-2 px-4 rounded-lg flex-1"
                   >
-                    Add Transaction
+                    {editingTransaction ? 'Update' : 'Add'} Transaction
                   </button>
                   <button
                     type="button"
-                    onClick={() => setShowForm(false)}
+                    onClick={() => {
+                      setShowForm(false)
+                      setEditingTransaction(null)
+                      setFormData({
+                        amount: '',
+                        type: 'expense',
+                        category: '',
+                        description: '',
+                        date: new Date().toISOString().split('T')[0],
+                      })
+                    }}
                     className="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg"
                   >
                     Cancel

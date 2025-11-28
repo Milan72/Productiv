@@ -3,11 +3,8 @@ import { prisma } from '@/lib/prisma'
 import { getUserIdFromRequest } from '@/lib/auth'
 import { z } from 'zod'
 
-const habitSchema = z.object({
-  name: z.string().min(1),
-  description: z.string().optional(),
-  frequency: z.string().optional(),
-  notes: z.string().optional(),
+const balanceSchema = z.object({
+  startingBalance: z.number(),
 })
 
 export async function GET(request: NextRequest) {
@@ -17,18 +14,12 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const habits = await prisma.habit.findMany({
-      where: { userId },
-      include: {
-        completions: {
-          orderBy: { date: 'desc' },
-          take: 30, // Last 30 completions
-        },
-      },
-      orderBy: { createdAt: 'desc' },
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { startingBalance: true },
     })
 
-    return NextResponse.json({ habits })
+    return NextResponse.json({ startingBalance: user?.startingBalance || 0 })
   } catch (error) {
     return NextResponse.json(
       { error: 'Internal server error' },
@@ -37,7 +28,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
-export async function POST(request: NextRequest) {
+export async function PUT(request: NextRequest) {
   try {
     const userId = getUserIdFromRequest(request)
     if (!userId) {
@@ -45,16 +36,15 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const data = habitSchema.parse(body)
+    const { startingBalance } = balanceSchema.parse(body)
 
-    const habit = await prisma.habit.create({
-      data: {
-        ...data,
-        userId,
-      },
+    const user = await prisma.user.update({
+      where: { id: userId },
+      data: { startingBalance },
+      select: { startingBalance: true },
     })
 
-    return NextResponse.json({ habit }, { status: 201 })
+    return NextResponse.json({ startingBalance: user.startingBalance })
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: error.errors }, { status: 400 })
@@ -65,6 +55,4 @@ export async function POST(request: NextRequest) {
     )
   }
 }
-
-
 

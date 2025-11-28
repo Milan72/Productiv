@@ -3,12 +3,10 @@ import { prisma } from '@/lib/prisma'
 import { getUserIdFromRequest } from '@/lib/auth'
 import { z } from 'zod'
 
-const transactionSchema = z.object({
-  amount: z.number().positive(),
-  type: z.enum(['income', 'expense']),
-  category: z.string().min(1),
-  description: z.string().optional(),
-  date: z.string().optional(),
+const categorySchema = z.object({
+  name: z.string().min(1).optional(),
+  budget: z.number().positive().optional(),
+  spent: z.number().min(0).optional(),
 })
 
 export async function PUT(
@@ -22,21 +20,18 @@ export async function PUT(
     }
 
     const body = await request.json()
-    const data = transactionSchema.parse(body)
+    const data = categorySchema.parse(body)
 
-    await prisma.transaction.updateMany({
+    await prisma.budgetCategory.updateMany({
       where: { id: params.id, userId },
-      data: {
-        ...data,
-        date: data.date ? new Date(data.date) : new Date(),
-      },
+      data,
     })
 
-    const transaction = await prisma.transaction.findUnique({
+    const category = await prisma.budgetCategory.findUnique({
       where: { id: params.id },
     })
 
-    return NextResponse.json({ transaction })
+    return NextResponse.json({ category })
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: error.errors }, { status: 400 })
@@ -58,11 +53,11 @@ export async function DELETE(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    await prisma.transaction.deleteMany({
+    await prisma.budgetCategory.deleteMany({
       where: { id: params.id, userId },
     })
 
-    return NextResponse.json({ message: 'Transaction deleted' })
+    return NextResponse.json({ message: 'Category deleted' })
   } catch (error) {
     return NextResponse.json(
       { error: 'Internal server error' },
@@ -70,3 +65,4 @@ export async function DELETE(
     )
   }
 }
+

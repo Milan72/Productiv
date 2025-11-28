@@ -38,6 +38,12 @@ export async function GET(request: NextRequest) {
       orderBy: { date: 'desc' },
     })
 
+    // Get user's starting balance
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { startingBalance: true },
+    })
+
     // Calculate totals
     const totalIncome = transactions
       .filter((t) => t.type === 'income')
@@ -45,11 +51,12 @@ export async function GET(request: NextRequest) {
     const totalExpenses = transactions
       .filter((t) => t.type === 'expense')
       .reduce((sum, t) => sum + t.amount, 0)
-    const balance = totalIncome - totalExpenses
+    const startingBalance = user?.startingBalance || 0
+    const balance = startingBalance + totalIncome - totalExpenses
 
     return NextResponse.json({
       transactions,
-      summary: { totalIncome, totalExpenses, balance },
+      summary: { totalIncome, totalExpenses, balance, startingBalance },
     })
   } catch (error) {
     return NextResponse.json(

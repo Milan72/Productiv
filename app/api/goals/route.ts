@@ -9,6 +9,10 @@ const goalSchema = z.object({
   targetDate: z.string().optional(),
   status: z.enum(['active', 'completed', 'paused']).optional(),
   progress: z.number().min(0).max(100).optional(),
+  priority: z.string().optional(),
+  timeframe: z.string().optional(),
+  currentValue: z.number().optional(),
+  targetValue: z.number().optional(),
 })
 
 export async function GET(request: NextRequest) {
@@ -45,8 +49,15 @@ export async function POST(request: NextRequest) {
 
     const goal = await prisma.goal.create({
       data: {
-        ...data,
+        title: data.title,
+        description: data.description || null,
         targetDate: data.targetDate ? new Date(data.targetDate) : null,
+        status: data.status || 'active',
+        progress: data.progress || 0,
+        priority: data.priority || null,
+        timeframe: data.timeframe || null,
+        currentValue: data.currentValue || null,
+        targetValue: data.targetValue || null,
         userId,
       },
       include: { okrs: true },

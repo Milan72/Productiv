@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from 'react'
 import AuthLayout from '@/components/AuthLayout'
-import { Plus, CheckSquare, Trash2, Calendar, Flame, BarChart3 } from 'lucide-react'
+import { Plus, CheckSquare, Trash2, Calendar, Flame, BarChart3, Edit2, List, Grid } from 'lucide-react'
 import { format, startOfWeek, addDays, isSameDay } from 'date-fns'
+import ReactMarkdown from 'react-markdown'
 
 interface Habit {
   id: string
@@ -11,6 +12,7 @@ interface Habit {
   description: string | null
   frequency: string
   streak: number
+  notes: string | null
   completions: Array<{
     date: string
   }>
@@ -20,11 +22,14 @@ export default function HabitsPage() {
   const [habits, setHabits] = useState<Habit[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
+  const [editingHabit, setEditingHabit] = useState<string | null>(null)
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
   const [selectedDate, setSelectedDate] = useState(new Date())
   const [formData, setFormData] = useState({
     name: '',
     description: '',
     frequency: 'daily',
+    notes: '',
   })
 
   const weekStart = startOfWeek(selectedDate, { weekStartsOn: 0 })
@@ -51,19 +56,34 @@ export default function HabitsPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     try {
-      const response = await fetch('/api/habits', {
-        method: 'POST',
+      const url = editingHabit ? `/api/habits/${editingHabit}` : '/api/habits'
+      const method = editingHabit ? 'PUT' : 'POST'
+
+      const response = await fetch(url, {
+        method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData),
       })
       if (response.ok) {
         setShowForm(false)
-        setFormData({ name: '', description: '', frequency: 'daily' })
+        setEditingHabit(null)
+        setFormData({ name: '', description: '', frequency: 'daily', notes: '' })
         fetchHabits()
       }
     } catch (error) {
-      console.error('Failed to create habit:', error)
+      console.error('Failed to save habit:', error)
     }
+  }
+
+  function handleEdit(habit: Habit) {
+    setEditingHabit(habit.id)
+    setFormData({
+      name: habit.name,
+      description: habit.description || '',
+      frequency: habit.frequency,
+      notes: habit.notes || '',
+    })
+    setShowForm(true)
   }
 
   async function handleComplete(id: string) {
@@ -124,16 +144,40 @@ export default function HabitsPage() {
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
-            <h1 className="text-4xl font-bold text-white mb-2">Habits</h1>
+            <h1 className="text-3xl md:text-4xl font-bold text-white mb-2">Habits</h1>
             <p className="text-gray-400">Build consistency, one day at a time</p>
           </div>
-          <button
-            onClick={() => setShowForm(!showForm)}
-            className="bg-yellow-400 hover:bg-yellow-500 text-white font-bold py-3 px-6 rounded-lg flex items-center gap-2 transition-colors"
-          >
-            <Plus className="w-5 h-5" />
-            Add Habit
-          </button>
+          <div className="flex gap-2">
+            <div className="flex bg-[#252a3a] rounded-lg p-1">
+              <button
+                onClick={() => setViewMode('grid')}
+                className={`p-2 rounded transition-colors ${
+                  viewMode === 'grid' ? 'bg-yellow-400 text-white' : 'text-gray-400 hover:text-white'
+                }`}
+              >
+                <Grid className="w-5 h-5" />
+              </button>
+              <button
+                onClick={() => setViewMode('list')}
+                className={`p-2 rounded transition-colors ${
+                  viewMode === 'list' ? 'bg-yellow-400 text-white' : 'text-gray-400 hover:text-white'
+                }`}
+              >
+                <List className="w-5 h-5" />
+              </button>
+            </div>
+            <button
+              onClick={() => {
+                setEditingHabit(null)
+                setFormData({ name: '', description: '', frequency: 'daily', notes: '' })
+                setShowForm(!showForm)
+              }}
+              className="bg-yellow-400 hover:bg-yellow-500 text-white font-bold py-3 px-6 rounded-lg flex items-center gap-2 transition-colors"
+            >
+              <Plus className="w-5 h-5" />
+              Add Habit
+            </button>
+          </div>
         </div>
 
         {/* This Week Calendar */}
@@ -153,7 +197,7 @@ export default function HabitsPage() {
                 <button
                   key={day.toISOString()}
                   onClick={() => setSelectedDate(day)}
-                  className="flex-1 text-center"
+                  className="flex-1 text-center min-w-[60px]"
                 >
                   <div className="text-gray-400 text-xs mb-1">
                     {format(day, 'EEE')}
@@ -197,19 +241,76 @@ export default function HabitsPage() {
               <CheckSquare className="w-16 h-16 text-gray-600 mx-auto mb-4" />
               <p className="text-gray-400 text-lg">No habits yet</p>
             </div>
+          ) : viewMode === 'list' ? (
+            <div className="space-y-4">
+              {habits.map((habit) => {
+                const monthlyRate = getMonthlyCompletionRate(habit)
+                const habitIcon = habitIcons[habit.name] || { icon: '✓', color: 'yellow' }
+
+                return (
+                  <div
+                    key={habit.id}
+                    className="bg-[#252a3a] rounded-2xl p-6 hover:bg-[#2a3042] transition-colors"
+                  >
+                    <div className="flex items-start gap-4">
+                      <div className="text-4xl">{habitIcon.icon}</div>
+                      <div className="flex-1">
+                        <div className="flex items-start justify-between mb-2">
+                          <div>
+                            <h3 className="text-lg font-bold text-white mb-1">
+                              {habit.name}
+                            </h3>
+                            {habit.description && (
+                              <p className="text-gray-400 text-sm mb-2">{habit.description}</p>
+                            )}
+                          </div>
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => handleEdit(habit)}
+                              className="text-blue-400 hover:text-blue-300 p-2"
+                            >
+                              <Edit2 className="w-5 h-5" />
+                            </button>
+                            <button
+                              onClick={() => handleDelete(habit.id)}
+                              className="text-red-400 hover:text-red-300 p-2"
+                            >
+                              <Trash2 className="w-5 h-5" />
+                            </button>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-4 text-sm mb-3">
+                          <span className="text-yellow-400 flex items-center gap-1">
+                            <Flame className="w-4 h-4" />
+                            {habit.streak} day streak
+                          </span>
+                          <span className="text-gray-400">
+                            {monthlyRate}% this month
+                          </span>
+                        </div>
+                        {habit.notes && (
+                          <div className="bg-[#1e2332] rounded-lg p-4 mt-3">
+                            <div className="text-gray-300 prose prose-invert prose-sm max-w-none">
+                              <ReactMarkdown>{habit.notes}</ReactMarkdown>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
           ) : (
             <div className="space-y-4">
               {habits.map((habit) => {
                 const monthlyRate = getMonthlyCompletionRate(habit)
                 const habitIcon = habitIcons[habit.name] || { icon: '✓', color: 'yellow' }
-                const isSelected = false // You can add selection logic
 
                 return (
                   <div
                     key={habit.id}
-                    className={`bg-[#252a3a] rounded-2xl p-6 hover:bg-[#2a3042] transition-colors ${
-                      isSelected ? 'border-2 border-yellow-400' : ''
-                    }`}
+                    className="bg-[#252a3a] rounded-2xl p-6 hover:bg-[#2a3042] transition-colors"
                   >
                     <div className="flex items-center gap-4">
                       <div className="text-4xl">{habitIcon.icon}</div>
@@ -257,12 +358,20 @@ export default function HabitsPage() {
                           </span>
                         </div>
                       </div>
-                      <button
-                        onClick={() => handleDelete(habit.id)}
-                        className="text-red-400 hover:text-red-300 p-2"
-                      >
-                        <Trash2 className="w-5 h-5" />
-                      </button>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => handleEdit(habit)}
+                          className="text-blue-400 hover:text-blue-300 p-2"
+                        >
+                          <Edit2 className="w-5 h-5" />
+                        </button>
+                        <button
+                          onClick={() => handleDelete(habit.id)}
+                          className="text-red-400 hover:text-red-300 p-2"
+                        >
+                          <Trash2 className="w-5 h-5" />
+                        </button>
+                      </div>
                     </div>
                   </div>
                 )
@@ -290,19 +399,13 @@ export default function HabitsPage() {
           </div>
         </div>
 
-        {/* Floating Action Button */}
-        <button
-          onClick={() => setShowForm(true)}
-          className="fixed bottom-24 right-6 w-14 h-14 bg-purple-500 hover:bg-purple-600 rounded-full flex items-center justify-center shadow-lg transition-colors z-10"
-        >
-          <Plus className="w-6 h-6 text-white" />
-        </button>
-
-        {/* Add Habit Form */}
+        {/* Add/Edit Habit Form */}
         {showForm && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-            <div className="bg-[#252a3a] rounded-2xl p-6 w-full max-w-md mx-4">
-              <h3 className="text-xl font-bold text-white mb-4">New Habit</h3>
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className="bg-[#252a3a] rounded-2xl p-6 w-full max-w-md">
+              <h3 className="text-xl font-bold text-white mb-4">
+                {editingHabit ? 'Edit Habit' : 'New Habit'}
+              </h3>
               <form onSubmit={handleSubmit} className="space-y-4">
                 <input
                   type="text"
@@ -323,6 +426,15 @@ export default function HabitsPage() {
                   rows={2}
                   className="w-full bg-[#1e2332] border border-gray-600 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:outline-none focus:border-yellow-400"
                 />
+                <textarea
+                  placeholder="Notes (Markdown supported)"
+                  value={formData.notes}
+                  onChange={(e) =>
+                    setFormData({ ...formData, notes: e.target.value })
+                  }
+                  rows={4}
+                  className="w-full bg-[#1e2332] border border-gray-600 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:outline-none focus:border-yellow-400 font-mono text-sm"
+                />
                 <select
                   value={formData.frequency}
                   onChange={(e) =>
@@ -338,11 +450,15 @@ export default function HabitsPage() {
                     type="submit"
                     className="bg-yellow-400 hover:bg-yellow-500 text-white font-bold py-2 px-4 rounded-lg flex-1"
                   >
-                    Create Habit
+                    {editingHabit ? 'Update' : 'Create'} Habit
                   </button>
                   <button
                     type="button"
-                    onClick={() => setShowForm(false)}
+                    onClick={() => {
+                      setShowForm(false)
+                      setEditingHabit(null)
+                      setFormData({ name: '', description: '', frequency: 'daily', notes: '' })
+                    }}
                     className="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg"
                   >
                     Cancel

@@ -11,12 +11,13 @@ datasource db {
 }
 
 model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  name      String
-  password  String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id             String   @id @default(cuid())
+  email          String   @unique
+  name           String
+  password       String
+  startingBalance Float   @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   goals        Goal[]
   habits       Habit[]
@@ -66,6 +67,7 @@ model Habit {
   description String?
   frequency   String   @default("daily") // daily, weekly, custom
   streak      Int      @default(0)
+  notes       String?  // Markdown notes for habit
   userId      String
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   createdAt   DateTime @default(now())
