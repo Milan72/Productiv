@@ -1,6 +1,4 @@
-
 # Personal OS
-
 A full-stack personal productivity application built with Next.js, featuring authentication, database persistence, and a beautiful dark-themed UI matching the Figma design.
 
 ## Features
@@ -33,12 +31,6 @@ A full-stack personal productivity application built with Next.js, featuring aut
 - **SQLite** - Database (easily upgradeable to PostgreSQL)
 - **JWT** - Authentication tokens
 - **bcryptjs** - Password hashing
-
-## Getting Started
-
-### Prerequisites
-- Node.js 18+ installed
-- npm or yarn package manager
 
 
 ### First Steps
@@ -111,8 +103,8 @@ The application uses Prisma with SQLite and includes models for:
 - **WeeklyReview** - Weekly reflection entries
 - **Priority** - Daily priorities
 
-<!--
 
+<!--
 ### Authentication
 - `POST /api/auth/register` - Register new user
 - `POST /api/auth/login` - Login user
@@ -142,6 +134,22 @@ npx prisma migrate reset
 ```bash
 # Open Prisma Studio
 npx prisma studio
+```
+
+## Production Deployment
+
+1. **Update environment variables** for production
+2. **Change database** to PostgreSQL (recommended):
+   - Update `DATABASE_URL` in `.env`
+   - Update `provider` in `prisma/schema.prisma` to `"postgresql"`
+   - Run migrations
+3. **Build the application**:
+```bash
+npm run build
+```
+4. **Start production server**:
+```bash
+npm start
 ```
 -->
 

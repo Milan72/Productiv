@@ -16,6 +16,11 @@ model User {
   name           String
   password       String
   startingBalance Float   @default(0)
+  monthlyBudget  Float    @default(0)
+  cashBalance    Float    @default(0)
+  bankBalance    Float    @default(0)
+  discoverConnected Boolean @default(false)
+  discoverLastSync DateTime?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 

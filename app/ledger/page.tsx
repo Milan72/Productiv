@@ -46,11 +46,49 @@ export default function LedgerPage() {
   })
   const [categoryEditData, setCategoryEditData] = useState<Record<string, { name: string; budget: number }>>({})
   const [startingBalanceValue, setStartingBalanceValue] = useState('0')
+  const [monthlyBudgetValue, setMonthlyBudgetValue] = useState('0')
+  const [editingMonthlyBudget, setEditingMonthlyBudget] = useState(false)
+  const [showImportForm, setShowImportForm] = useState(false)
+  const [importFile, setImportFile] = useState<File | null>(null)
+  const [cashBalance, setCashBalance] = useState('0')
+  const [bankBalance, setBankBalance] = useState('0')
+  const [editingCash, setEditingCash] = useState(false)
+  const [editingBank, setEditingBank] = useState(false)
+  const [showTransferForm, setShowTransferForm] = useState(false)
+  const [transferAmount, setTransferAmount] = useState('')
+  const [transferFrom, setTransferFrom] = useState<'cash' | 'bank'>('cash')
+  const [discoverConnected, setDiscoverConnected] = useState(false)
+  const [discoverLastSync, setDiscoverLastSync] = useState<string | null>(null)
 
   useEffect(() => {
     fetchData()
     fetchStartingBalance()
+    fetchMonthlyBudget()
+    fetchBalances()
+    fetchDiscoverStatus()
+    ensureDefaultCategories()
   }, [currentDate, selectedPeriod])
+
+  async function ensureDefaultCategories() {
+    const defaultCats = ['Personal', 'Business', 'Charity', 'Investments']
+    for (const catName of defaultCats) {
+      try {
+        const response = await fetch('/api/budget-categories')
+        const data = await response.json()
+        const exists = data.categories?.some((c: BudgetCategory) => c.name === catName)
+        
+        if (!exists) {
+          await fetch('/api/budget-categories', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: catName, budget: 0 }),
+          })
+        }
+      } catch (error) {
+        console.error('Failed to create category:', error)
+      }
+    }
+  }
 
   async function fetchStartingBalance() {
     try {
@@ -80,16 +118,208 @@ export default function LedgerPage() {
     }
   }
 
+  async function fetchMonthlyBudget() {
+    try {
+      const response = await fetch('/api/user/monthly-budget')
+      if (response.ok) {
+        const data = await response.json()
+        setMonthlyBudgetValue(data.monthlyBudget.toString())
+      }
+    } catch (error) {
+      console.error('Failed to fetch monthly budget:', error)
+    }
+  }
+
+  async function updateMonthlyBudget() {
+    try {
+      const response = await fetch('/api/user/monthly-budget', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ monthlyBudget: parseFloat(monthlyBudgetValue) }),
+      })
+      if (response.ok) {
+        setEditingMonthlyBudget(false)
+        fetchData()
+      }
+    } catch (error) {
+      console.error('Failed to update monthly budget:', error)
+    }
+  }
+
+  async function fetchBalances() {
+    try {
+      const response = await fetch('/api/user/balances')
+      if (response.ok) {
+        const data = await response.json()
+        setCashBalance(data.cashBalance.toString())
+        setBankBalance(data.bankBalance.toString())
+      }
+    } catch (error) {
+      console.error('Failed to fetch balances:', error)
+    }
+  }
+
+  async function updateBalance(type: 'cash' | 'bank', value: string) {
+    try {
+      const response = await fetch('/api/user/balances', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          [type === 'cash' ? 'cashBalance' : 'bankBalance']: parseFloat(value),
+        }),
+      })
+      if (response.ok) {
+        if (type === 'cash') setEditingCash(false)
+        else setEditingBank(false)
+        fetchBalances()
+      }
+    } catch (error) {
+      console.error('Failed to update balance:', error)
+    }
+  }
+
+  async function handleTransfer() {
+    if (!transferAmount || parseFloat(transferAmount) <= 0) return
+
+    try {
+      const response = await fetch('/api/user/transfer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          amount: parseFloat(transferAmount),
+          from: transferFrom,
+          to: transferFrom === 'cash' ? 'bank' : 'cash',
+        }),
+      })
+
+      if (response.ok) {
+        alert('Transfer successful!')
+        setShowTransferForm(false)
+        setTransferAmount('')
+        fetchBalances()
+      } else {
+        const error = await response.json()
+        alert('Transfer failed: ' + error.error)
+      }
+    } catch (error) {
+      console.error('Failed to transfer:', error)
+      alert('Transfer failed. Please try again.')
+    }
+  }
+
+  async function fetchDiscoverStatus() {
+    try {
+      const response = await fetch('/api/discover/connect')
+      if (response.ok) {
+        const data = await response.json()
+        setDiscoverConnected(data.connected)
+        setDiscoverLastSync(data.lastSync)
+      }
+    } catch (error) {
+      console.error('Failed to fetch Discover status:', error)
+    }
+  }
+
+  async function handleDiscoverConnect() {
+    try {
+      const response = await fetch('/api/discover/connect', {
+        method: 'POST',
+      })
+
+      if (response.ok) {
+        alert('Successfully connected to Discover!')
+        fetchDiscoverStatus()
+      }
+    } catch (error) {
+      console.error('Failed to connect to Discover:', error)
+      alert('Failed to connect to Discover.')
+    }
+  }
+
+  async function handleDiscoverSync() {
+    try {
+      const response = await fetch('/api/discover/sync', {
+        method: 'POST',
+      })
+
+      if (response.ok) {
+        alert('Sync completed!')
+        fetchDiscoverStatus()
+        fetchData()
+      }
+    } catch (error) {
+      console.error('Failed to sync with Discover:', error)
+      alert('Sync failed.')
+    }
+  }
+
+  async function handleImportDiscover() {
+    if (!importFile) return
+
+    try {
+      const fileContent = await importFile.text()
+      let transactions = []
+
+      // Try to parse as JSON first
+      try {
+        const jsonData = JSON.parse(fileContent)
+        transactions = Array.isArray(jsonData) ? jsonData : jsonData.transactions
+      } catch {
+        // If JSON parsing fails, try CSV
+        const lines = fileContent.split('\n')
+        const headers = lines[0].split(',')
+        
+        for (let i = 1; i < lines.length; i++) {
+          if (!lines[i].trim()) continue
+          const values = lines[i].split(',')
+          const transaction: any = {}
+          
+          headers.forEach((header, index) => {
+            transaction[header.trim().toLowerCase()] = values[index]?.trim()
+          })
+          
+          transactions.push({
+            amount: parseFloat(transaction.amount || transaction.debit || transaction.credit),
+            description: transaction.description || transaction.merchant || transaction.desc,
+            date: transaction.date || transaction['trans. date'] || transaction['post date'],
+            category: transaction.category || 'Discover Import',
+          })
+        }
+      }
+
+      const response = await fetch('/api/discover/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ transactions }),
+      })
+
+      if (response.ok) {
+        alert('Transactions imported successfully!')
+        setShowImportForm(false)
+        setImportFile(null)
+        fetchData()
+      } else {
+        const error = await response.json()
+        alert('Failed to import transactions: ' + JSON.stringify(error))
+      }
+    } catch (error) {
+      console.error('Failed to import transactions:', error)
+      alert('Failed to import transactions. Please check the file format.')
+    }
+  }
+
   async function fetchData() {
     try {
       const month = currentDate.getMonth() + 1
       const year = currentDate.getFullYear()
       const response = await fetch(`/api/transactions?month=${month}&year=${year}`)
+      let transactionData: any = null
+      
       if (response.ok) {
-        const data = await response.json()
-        setTransactions(data.transactions)
+        transactionData = await response.json()
+        setTransactions(transactionData.transactions)
         setSummary({
-          ...data.summary,
+          ...transactionData.summary,
           incomeChange: 12.5, // Mock data
         })
       }
@@ -97,7 +327,19 @@ export default function LedgerPage() {
       const budgetResponse = await fetch('/api/budget-categories')
       if (budgetResponse.ok) {
         const budgetData = await budgetResponse.json()
-        setBudgetCategories(budgetData.categories || [])
+        const categories = budgetData.categories || []
+        
+        // Calculate spent amount for each category from transactions
+        const categoriesWithSpent = categories.map((cat: BudgetCategory) => {
+          const spent = transactionData 
+            ? transactionData.transactions
+                .filter((t: Transaction) => t.type === 'expense' && t.category === cat.name)
+                .reduce((sum: number, t: Transaction) => sum + t.amount, 0)
+            : 0
+          return { ...cat, spent: spent || 0 }
+        })
+        
+        setBudgetCategories(categoriesWithSpent)
       }
     } catch (error) {
       console.error('Failed to fetch data:', error)
@@ -222,22 +464,27 @@ export default function LedgerPage() {
     setCurrentDate(newDate)
   }
 
-  const budgetPercentage = summary.totalExpenses > 0 && budgetCategories.length > 0
-    ? Math.round((summary.totalExpenses / budgetCategories.reduce((sum, cat) => sum + cat.budget, 0)) * 100)
+  const totalBudget = parseFloat(monthlyBudgetValue) > 0 
+    ? parseFloat(monthlyBudgetValue)
+    : budgetCategories.reduce((sum, cat) => sum + cat.budget, 0)
+  
+  const budgetPercentage = summary.totalExpenses > 0 && totalBudget > 0
+    ? Math.round((summary.totalExpenses / totalBudget) * 100)
     : 0
 
-  const defaultCategories = [
-    { name: 'Personal', icon: User, color: 'purple', budget: 2000, spent: 1450 },
-    { name: 'Business', icon: Briefcase, color: 'brown', budget: 5000, spent: 3200 },
-    { name: 'Charity', icon: Heart, color: 'pink', budget: 500, spent: 350 },
-    { name: 'Investments', icon: LineChart, color: 'blue', budget: 3000, spent: 2800 },
-  ]
+  const categoryIcons: Record<string, { icon: any; color: string }> = {
+    'Personal': { icon: User, color: 'purple' },
+    'Business': { icon: Briefcase, color: 'brown' },
+    'Charity': { icon: Heart, color: 'pink' },
+    'Investments': { icon: LineChart, color: 'blue' },
+  }
 
-  // Merge default categories with user's categories
-  const allCategories = defaultCategories.map((defaultCat) => {
-    const userCat = budgetCategories.find((c) => c.name === defaultCat.name)
-    return userCat || defaultCat
-  })
+  // Use actual budget categories from database
+  const allCategories = budgetCategories.map((cat) => ({
+    ...cat,
+    icon: categoryIcons[cat.name]?.icon || User,
+    color: categoryIcons[cat.name]?.color || 'purple',
+  }))
 
   return (
     <AuthLayout>
@@ -248,73 +495,278 @@ export default function LedgerPage() {
             <h1 className="text-3xl md:text-4xl font-bold text-white mb-2">Financial Ledger</h1>
             <p className="text-gray-400">Rockefeller-style penny accuracy</p>
           </div>
-          <button
-            onClick={() => {
-              setEditingTransaction(null)
-              setFormData({
-                amount: '',
-                type: 'expense',
-                category: '',
-                description: '',
-                date: new Date().toISOString().split('T')[0],
-              })
-              setShowForm(!showForm)
-            }}
-            className="bg-yellow-400 hover:bg-yellow-500 text-white font-bold py-3 px-6 rounded-lg flex items-center gap-2 transition-colors w-full md:w-auto justify-center"
-          >
-            <Plus className="w-5 h-5" />
-            Add Transaction
-          </button>
+          <div className="flex gap-3 flex-col md:flex-row">
+            {discoverConnected ? (
+              <button
+                onClick={handleDiscoverSync}
+                className="bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-6 rounded-lg flex items-center gap-2 transition-colors w-full md:w-auto justify-center"
+              >
+                <ArrowDown className="w-5 h-5" />
+                Sync Discover
+              </button>
+            ) : (
+              <button
+                onClick={handleDiscoverConnect}
+                className="bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-6 rounded-lg flex items-center gap-2 transition-colors w-full md:w-auto justify-center"
+              >
+                <ArrowDown className="w-5 h-5" />
+                Connect Discover
+              </button>
+            )}
+            <button
+              onClick={() => setShowImportForm(true)}
+              className="bg-purple-500 hover:bg-purple-600 text-white font-bold py-3 px-6 rounded-lg flex items-center gap-2 transition-colors w-full md:w-auto justify-center"
+            >
+              <ArrowUp className="w-5 h-5" />
+              Manual Import
+            </button>
+            <button
+              onClick={() => {
+                setEditingTransaction(null)
+                setFormData({
+                  amount: '',
+                  type: 'expense',
+                  category: '',
+                  description: '',
+                  date: new Date().toISOString().split('T')[0],
+                })
+                setShowForm(!showForm)
+              }}
+              className="bg-yellow-400 hover:bg-yellow-500 text-white font-bold py-3 px-6 rounded-lg flex items-center gap-2 transition-colors w-full md:w-auto justify-center"
+            >
+              <Plus className="w-5 h-5" />
+              Add Transaction
+            </button>
+          </div>
         </div>
 
-        {/* Starting Balance */}
-        <div className="bg-[#252a3a] rounded-2xl p-4 md:p-6 mb-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="text-gray-400 text-sm mb-2">Starting Balance</div>
-              {editingStartingBalance ? (
-                <div className="flex items-center gap-2">
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={startingBalanceValue}
-                    onChange={(e) => setStartingBalanceValue(e.target.value)}
-                    className="bg-[#1e2332] border border-gray-600 rounded-lg px-4 py-2 text-white text-xl font-bold w-48"
-                  />
-                  <button
-                    onClick={updateStartingBalance}
-                    className="p-2 bg-green-500 hover:bg-green-600 rounded-lg"
-                  >
-                    <Save className="w-5 h-5 text-white" />
-                  </button>
-                  <button
-                    onClick={() => {
-                      setEditingStartingBalance(false)
-                      fetchStartingBalance()
-                    }}
-                    className="p-2 bg-gray-600 hover:bg-gray-700 rounded-lg"
-                  >
-                    <X className="w-5 h-5 text-white" />
-                  </button>
-                </div>
-              ) : (
-                <div className="flex items-center gap-3">
-                  <div className="text-2xl md:text-3xl font-bold text-yellow-400">
-                    ${parseFloat(startingBalanceValue).toLocaleString('en-US', {
-                      minimumFractionDigits: 2,
-                      maximumFractionDigits: 2,
-                    })}
+        {/* Discover Status */}
+        {discoverConnected && discoverLastSync && (
+          <div className="bg-green-500/10 border border-green-500/30 rounded-xl p-4 mb-6 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
+              <span className="text-green-400 font-medium">Discover Connected</span>
+              <span className="text-gray-400 text-sm">
+                Last synced: {new Date(discoverLastSync).toLocaleString()}
+              </span>
+            </div>
+            <button
+              onClick={handleDiscoverSync}
+              className="text-green-400 hover:text-green-300 text-sm underline"
+            >
+              Sync Now
+            </button>
+          </div>
+        )}
+
+        {/* Balances Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-6">
+          <div className="bg-[#252a3a] rounded-2xl p-4 md:p-6">
+            <div className="flex items-center justify-between">
+              <div className="flex-1">
+                <div className="text-gray-400 text-sm mb-2">Starting Balance</div>
+                {editingStartingBalance ? (
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={startingBalanceValue}
+                      onChange={(e) => setStartingBalanceValue(e.target.value)}
+                      className="bg-[#1e2332] border border-gray-600 rounded-lg px-4 py-2 text-white text-xl font-bold w-48"
+                    />
+                    <button
+                      onClick={updateStartingBalance}
+                      className="p-2 bg-green-500 hover:bg-green-600 rounded-lg"
+                    >
+                      <Save className="w-5 h-5 text-white" />
+                    </button>
+                    <button
+                      onClick={() => {
+                        setEditingStartingBalance(false)
+                        fetchStartingBalance()
+                      }}
+                      className="p-2 bg-gray-600 hover:bg-gray-700 rounded-lg"
+                    >
+                      <X className="w-5 h-5 text-white" />
+                    </button>
                   </div>
-                  <button
-                    onClick={() => setEditingStartingBalance(true)}
-                    className="p-2 hover:bg-gray-700 rounded-lg transition-colors"
-                  >
-                    <Edit2 className="w-4 h-4 text-gray-400" />
-                  </button>
-                </div>
-              )}
+                ) : (
+                  <div className="flex items-center gap-3">
+                    <div className="text-2xl md:text-3xl font-bold text-yellow-400">
+                      ${parseFloat(startingBalanceValue).toLocaleString('en-US', {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      })}
+                    </div>
+                    <button
+                      onClick={() => setEditingStartingBalance(true)}
+                      className="p-2 hover:bg-gray-700 rounded-lg transition-colors"
+                    >
+                      <Edit2 className="w-4 h-4 text-gray-400" />
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
+
+          <div className="bg-[#252a3a] rounded-2xl p-4 md:p-6">
+            <div className="flex items-center justify-between">
+              <div className="flex-1">
+                <div className="text-gray-400 text-sm mb-2">Monthly Budget</div>
+                {editingMonthlyBudget ? (
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={monthlyBudgetValue}
+                      onChange={(e) => setMonthlyBudgetValue(e.target.value)}
+                      className="bg-[#1e2332] border border-gray-600 rounded-lg px-4 py-2 text-white text-xl font-bold w-48"
+                    />
+                    <button
+                      onClick={updateMonthlyBudget}
+                      className="p-2 bg-green-500 hover:bg-green-600 rounded-lg"
+                    >
+                      <Save className="w-5 h-5 text-white" />
+                    </button>
+                    <button
+                      onClick={() => {
+                        setEditingMonthlyBudget(false)
+                        fetchMonthlyBudget()
+                      }}
+                      className="p-2 bg-gray-600 hover:bg-gray-700 rounded-lg"
+                    >
+                      <X className="w-5 h-5 text-white" />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-3">
+                    <div className="text-2xl md:text-3xl font-bold text-green-400">
+                      ${parseFloat(monthlyBudgetValue).toLocaleString('en-US', {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      })}
+                    </div>
+                    <button
+                      onClick={() => setEditingMonthlyBudget(true)}
+                      className="p-2 hover:bg-gray-700 rounded-lg transition-colors"
+                    >
+                      <Edit2 className="w-4 h-4 text-gray-400" />
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-[#252a3a] rounded-2xl p-4 md:p-6">
+            <div className="flex items-center justify-between">
+              <div className="flex-1">
+                <div className="text-gray-400 text-sm mb-2">Cash Balance</div>
+                {editingCash ? (
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={cashBalance}
+                      onChange={(e) => setCashBalance(e.target.value)}
+                      className="bg-[#1e2332] border border-gray-600 rounded-lg px-4 py-2 text-white text-xl font-bold w-48"
+                    />
+                    <button
+                      onClick={() => updateBalance('cash', cashBalance)}
+                      className="p-2 bg-green-500 hover:bg-green-600 rounded-lg"
+                    >
+                      <Save className="w-5 h-5 text-white" />
+                    </button>
+                    <button
+                      onClick={() => {
+                        setEditingCash(false)
+                        fetchBalances()
+                      }}
+                      className="p-2 bg-gray-600 hover:bg-gray-700 rounded-lg"
+                    >
+                      <X className="w-5 h-5 text-white" />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-3">
+                    <div className="text-2xl md:text-3xl font-bold text-blue-400">
+                      ${parseFloat(cashBalance).toLocaleString('en-US', {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      })}
+                    </div>
+                    <button
+                      onClick={() => setEditingCash(true)}
+                      className="p-2 hover:bg-gray-700 rounded-lg transition-colors"
+                    >
+                      <Edit2 className="w-4 h-4 text-gray-400" />
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-[#252a3a] rounded-2xl p-4 md:p-6">
+            <div className="flex items-center justify-between">
+              <div className="flex-1">
+                <div className="text-gray-400 text-sm mb-2">Bank Balance</div>
+                {editingBank ? (
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={bankBalance}
+                      onChange={(e) => setBankBalance(e.target.value)}
+                      className="bg-[#1e2332] border border-gray-600 rounded-lg px-4 py-2 text-white text-xl font-bold w-48"
+                    />
+                    <button
+                      onClick={() => updateBalance('bank', bankBalance)}
+                      className="p-2 bg-green-500 hover:bg-green-600 rounded-lg"
+                    >
+                      <Save className="w-5 h-5 text-white" />
+                    </button>
+                    <button
+                      onClick={() => {
+                        setEditingBank(false)
+                        fetchBalances()
+                      }}
+                      className="p-2 bg-gray-600 hover:bg-gray-700 rounded-lg"
+                    >
+                      <X className="w-5 h-5 text-white" />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-3">
+                    <div className="text-2xl md:text-3xl font-bold text-purple-400">
+                      ${parseFloat(bankBalance).toLocaleString('en-US', {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      })}
+                    </div>
+                    <button
+                      onClick={() => setEditingBank(true)}
+                      className="p-2 hover:bg-gray-700 rounded-lg transition-colors"
+                    >
+                      <Edit2 className="w-4 h-4 text-gray-400" />
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Transfer Button */}
+        <div className="mb-6">
+          <button
+            onClick={() => setShowTransferForm(true)}
+            className="bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white font-bold py-3 px-6 rounded-lg flex items-center gap-2 transition-colors"
+          >
+            <ArrowUp className="w-5 h-5 rotate-90" />
+            Transfer Between Accounts
+          </button>
         </div>
 
         {/* Date Navigation */}
@@ -402,17 +854,17 @@ export default function LedgerPage() {
           <h2 className="text-xl md:text-2xl font-bold text-white mb-4">Budget Breakdown</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {allCategories.map((category) => {
-              const Icon = 'icon' in category ? category.icon : User
-              const categoryId = 'id' in category ? category.id : category.name
-              const percentage = Math.round((category.spent / category.budget) * 100)
+              const Icon = category.icon || User
+              const categoryId = category.id
+              const percentage = category.budget > 0 ? Math.round((category.spent / category.budget) * 100) : 0
               const isOverBudget = percentage >= 90
               const isEditing = editingCategory === categoryId
               const editData = categoryEditData[categoryId] || { name: category.name, budget: category.budget }
 
-              const categoryColor = 'color' in category ? category.color : 'purple'
+              const categoryColor = category.color || 'purple'
               
               return (
-                <div key={category.name} className="bg-[#252a3a] rounded-2xl p-4 md:p-6">
+                <div key={category.id} className="bg-[#252a3a] rounded-2xl p-4 md:p-6">
                   <div className="flex items-center gap-4 mb-4">
                     <div className={`w-12 h-12 rounded-lg flex items-center justify-center flex-shrink-0 ${
                       categoryColor === 'purple' ? 'bg-purple-500/20' :
@@ -428,7 +880,7 @@ export default function LedgerPage() {
                       }`} />
                     </div>
                     <div className="flex-1">
-                      {isEditing && 'id' in category ? (
+                      {isEditing ? (
                         <div className="space-y-2">
                           <input
                             type="text"
@@ -480,9 +932,9 @@ export default function LedgerPage() {
                         </>
                       )}
                     </div>
-                    {!isEditing && 'id' in category && (
+                    {!isEditing && (
                       <button
-                        onClick={() => startEditingCategory(category as BudgetCategory)}
+                        onClick={() => startEditingCategory(category)}
                         className="p-2 hover:bg-gray-700 rounded-lg transition-colors"
                       >
                         <Edit2 className="w-4 h-4 text-gray-400" />
@@ -679,6 +1131,136 @@ export default function LedgerPage() {
                   </button>
                 </div>
               </form>
+            </div>
+          </div>
+        )}
+
+        {/* Import from Discover Form */}
+        {showImportForm && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className="bg-[#252a3a] rounded-2xl p-6 w-full max-w-md">
+              <h3 className="text-xl font-bold text-white mb-4">
+                Import Transactions from Discover
+              </h3>
+              <div className="space-y-4">
+                <div>
+                  <p className="text-gray-400 text-sm mb-4">
+                    Upload a CSV or JSON file exported from your Discover account.
+                  </p>
+                  <div className="bg-[#1e2332] border-2 border-dashed border-gray-600 rounded-lg p-6 text-center">
+                    <input
+                      type="file"
+                      accept=".csv,.json"
+                      onChange={(e) => setImportFile(e.target.files?.[0] || null)}
+                      className="hidden"
+                      id="file-upload"
+                    />
+                    <label
+                      htmlFor="file-upload"
+                      className="cursor-pointer flex flex-col items-center gap-2"
+                    >
+                      <ArrowUp className="w-8 h-8 text-gray-400" />
+                      <span className="text-white font-medium">
+                        {importFile ? importFile.name : 'Choose a file'}
+                      </span>
+                      <span className="text-gray-500 text-sm">CSV or JSON format</span>
+                    </label>
+                  </div>
+                  <div className="mt-4 p-4 bg-blue-500/10 border border-blue-500/30 rounded-lg">
+                    <p className="text-blue-400 text-sm">
+                      <strong>CSV Format:</strong> Headers should include: amount, description, date, category
+                      <br />
+                      <strong>JSON Format:</strong> Array of objects with the same fields
+                    </p>
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleImportDiscover}
+                    disabled={!importFile}
+                    className="bg-blue-500 hover:bg-blue-600 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold py-2 px-4 rounded-lg flex-1 transition-colors"
+                  >
+                    Import Transactions
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowImportForm(false)
+                      setImportFile(null)
+                    }}
+                    className="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Transfer Form */}
+        {showTransferForm && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className="bg-[#252a3a] rounded-2xl p-6 w-full max-w-md">
+              <h3 className="text-xl font-bold text-white mb-4">
+                Transfer Between Accounts
+              </h3>
+              <div className="space-y-4">
+                <div>
+                  <label className="text-gray-400 text-sm mb-2 block">Transfer From</label>
+                  <select
+                    value={transferFrom}
+                    onChange={(e) => setTransferFrom(e.target.value as 'cash' | 'bank')}
+                    className="w-full bg-[#1e2332] border border-gray-600 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-blue-400"
+                  >
+                    <option value="cash">Cash ({`$${parseFloat(cashBalance).toFixed(2)}`})</option>
+                    <option value="bank">Bank ({`$${parseFloat(bankBalance).toFixed(2)}`})</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-gray-400 text-sm mb-2 block">Transfer To</label>
+                  <div className="w-full bg-[#1e2332] border border-gray-600 rounded-lg px-4 py-3 text-white">
+                    {transferFrom === 'cash' ? `Bank ($${parseFloat(bankBalance).toFixed(2)})` : `Cash ($${parseFloat(cashBalance).toFixed(2)})`}
+                  </div>
+                </div>
+                <div>
+                  <label className="text-gray-400 text-sm mb-2 block">Amount</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    placeholder="Enter amount"
+                    value={transferAmount}
+                    onChange={(e) => setTransferAmount(e.target.value)}
+                    className="w-full bg-[#1e2332] border border-gray-600 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:outline-none focus:border-blue-400"
+                  />
+                </div>
+                <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3">
+                  <p className="text-blue-400 text-sm">
+                    {transferAmount && parseFloat(transferAmount) > 0
+                      ? `Transfer $${parseFloat(transferAmount).toFixed(2)} from ${transferFrom === 'cash' ? 'Cash' : 'Bank'} to ${transferFrom === 'cash' ? 'Bank' : 'Cash'}`
+                      : 'Enter an amount to transfer'}
+                  </p>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleTransfer}
+                    disabled={!transferAmount || parseFloat(transferAmount) <= 0}
+                    className="bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 disabled:from-gray-600 disabled:to-gray-600 disabled:cursor-not-allowed text-white font-bold py-2 px-4 rounded-lg flex-1 transition-colors"
+                  >
+                    Transfer Funds
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowTransferForm(false)
+                      setTransferAmount('')
+                    }}
+                    className="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         )}
